@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Household Ledger
 
-## Getting Started
+Internal rental applicant &amp; tenant management system. See the architecture
+plan (shared separately) for the full workflow, schema rationale, and
+MVP/Phase 2/3 split.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Next.js (App Router, TypeScript, Tailwind)
+- Supabase (Postgres, Auth, Storage)
+- Square (payments), RentPrep (screening, manual), Dropbox Sign (e-signature)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## First-time setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Install dependencies** (already done if you're reading this after scaffold):
+   ```bash
+   npm install
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Create the Supabase project.** This needs your own Supabase login, so do
+   this step yourself:
+   ```bash
+   supabase login
+   ```
+   This opens a browser to authenticate the CLI. Then either create a
+   project at [supabase.com/dashboard](https://supabase.com/dashboard) and
+   note its project ref, or run:
+   ```bash
+   supabase projects create household-ledger --org-id <your-org-id>
+   ```
+   (`supabase orgs list` shows your org id if you don't have it handy.)
 
-## Learn More
+3. **Link this repo to the project:**
+   ```bash
+   supabase link --project-ref <your-project-ref>
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+4. **Push the schema:**
+   ```bash
+   supabase db push
+   ```
+   This applies `supabase/migrations/0001_init.sql` (tables) and
+   `0002_rls.sql` (row-level security policies).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+5. **Generate TypeScript types** (replaces the placeholder in
+   `src/lib/supabase/types.ts`):
+   ```bash
+   supabase gen types typescript --project-id <your-project-ref> > src/lib/supabase/types.ts
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+6. **Copy environment variables:**
+   ```bash
+   cp .env.local.example .env.local
+   ```
+   Fill in the Supabase URL/keys from Project Settings → API. Leave the
+   Square and Dropbox Sign values blank until those integrations are wired
+   up.
 
-## Deploy on Vercel
+7. **Create your first staff account.** Add yourself (and your wife) as
+   users in Supabase Auth (dashboard → Authentication → Users → Add user),
+   then insert a matching row in `staff_users` with `role = 'owner'` for
+   each of you — the app has no self-serve signup by design.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+8. **Run the dev server:**
+   ```bash
+   npm run dev
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project layout
+
+- `supabase/migrations/` — schema (`0001_init.sql`) and RLS policies
+  (`0002_rls.sql`), applied in order.
+- `src/lib/supabase/client.ts` — browser Supabase client.
+- `src/lib/supabase/server.ts` — server Supabase client (Server Components,
+  Route Handlers), respects RLS as the logged-in staff user.
+- `src/lib/supabase/service.ts` — service-role client. Server-only. Used by
+  the applicant-facing API routes (no login) and by webhook handlers.
+  Never import this from anything that ships to the browser.
