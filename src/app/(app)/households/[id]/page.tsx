@@ -23,6 +23,11 @@ import {
   updateDiscrepancyStatus,
   recordDecision,
   recordNoticeSent,
+  uploadDocument,
+  getDocumentDownloadUrl,
+  addNotice,
+  addMaintenanceRequest,
+  resolveMaintenanceRequest,
 } from "./actions";
 
 export default async function HouseholdDetailPage({ params }: PageProps<"/households/[id]">) {
@@ -46,6 +51,9 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
     { data: tasks },
     { data: activity },
     { data: agreements },
+    { data: documents },
+    { data: notices },
+    { data: maintenanceRequests },
   ] = await Promise.all([
     supabase.from("people").select("*").eq("household_id", id).order("created_at"),
     supabase
@@ -58,6 +66,9 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
     supabase.from("tasks").select("*").eq("household_id", id).order("due_date"),
     supabase.from("activity_log").select("*").eq("household_id", id).order("occurred_at", { ascending: false }),
     supabase.from("agreements").select("*").eq("household_id", id).order("created_at", { ascending: false }),
+    supabase.from("documents").select("*").eq("household_id", id).order("created_at", { ascending: false }),
+    supabase.from("notices").select("*").eq("household_id", id).order("sent_at", { ascending: false }),
+    supabase.from("maintenance_requests").select("*").eq("household_id", id).order("reported_at", { ascending: false }),
   ]);
 
   const latestApplicationId = applications?.[0]?.id as string | undefined;
@@ -101,6 +112,9 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
       applicantProfiles={applicantProfiles ?? []}
       discrepancies={discrepancies ?? []}
       decisions={decisions ?? []}
+      documents={documents ?? []}
+      notices={notices ?? []}
+      maintenanceRequests={maintenanceRequests ?? []}
       latestApplicationId={latestApplicationId ?? null}
       actions={{
         updateStage: updateStage.bind(null, id),
@@ -123,6 +137,11 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
         updateDiscrepancyStatus: updateDiscrepancyStatus.bind(null, id),
         recordDecision: recordDecision.bind(null, id),
         recordNoticeSent: recordNoticeSent.bind(null, id),
+        uploadDocument: uploadDocument.bind(null, id),
+        getDocumentDownloadUrl,
+        addNotice: addNotice.bind(null, id),
+        addMaintenanceRequest: addMaintenanceRequest.bind(null, id),
+        resolveMaintenanceRequest: resolveMaintenanceRequest.bind(null, id),
       }}
     />
   );

@@ -12,11 +12,13 @@ const TABS = [
   "Discrepancies",
   "Decision",
   "Agreements",
+  "Documents",
   "Payments",
   "Communications",
+  "Notices",
+  "Maintenance",
   "Tasks",
   "Activity",
-  "Roadmap",
 ] as const;
 
 type Tab = (typeof TABS)[number];
@@ -46,6 +48,9 @@ export default function HouseholdView({
   applicantProfiles,
   discrepancies,
   decisions,
+  documents,
+  notices,
+  maintenanceRequests,
   latestApplicationId,
   actions,
 }: {
@@ -60,6 +65,9 @@ export default function HouseholdView({
   applicantProfiles: Row[];
   discrepancies: Row[];
   decisions: Row[];
+  documents: Row[];
+  notices: Row[];
+  maintenanceRequests: Row[];
   latestApplicationId: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   actions: Record<string, (...args: any[]) => Promise<any>>;
@@ -144,11 +152,17 @@ export default function HouseholdView({
           onGetDownloadUrl={actions.getAgreementDownloadUrl}
         />
       )}
+      {tab === "Documents" && (
+        <Documents documents={documents} onUpload={actions.uploadDocument} onGetDownloadUrl={actions.getDocumentDownloadUrl} />
+      )}
       {tab === "Payments" && <Payments payments={payments} action={actions.recordPayment} />}
       {tab === "Communications" && <Communications items={communications} action={actions.addCommunication} />}
+      {tab === "Notices" && <Notices notices={notices} onAdd={actions.addNotice} />}
+      {tab === "Maintenance" && (
+        <Maintenance requests={maintenanceRequests} onAdd={actions.addMaintenanceRequest} onResolve={actions.resolveMaintenanceRequest} />
+      )}
       {tab === "Tasks" && <Tasks tasks={tasks} onAdd={actions.addTask} onComplete={actions.completeTask} />}
       {tab === "Activity" && <Activity items={activity} />}
-      {tab === "Roadmap" && <Roadmap />}
     </div>
   );
 }
@@ -1174,16 +1188,179 @@ function Decision({
   );
 }
 
-function Roadmap() {
-  const items = ["Documents", "Notices", "Maintenance"];
+const DOCUMENT_CATEGORIES = [
+  "application",
+  "applicant_upload",
+  "verification",
+  "screening",
+  "lease",
+  "lease_option",
+  "addendum",
+  "notice",
+  "payment",
+  "maintenance",
+  "photo",
+  "correspondence",
+  "other",
+];
+
+function Documents({
+  documents,
+  onUpload,
+  onGetDownloadUrl,
+}: {
+  documents: Row[];
+  onUpload: (fd: FormData) => Promise<void>;
+  onGetDownloadUrl: (path: string) => Promise<string | null>;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  async function handleUpload(fd: FormData) {
+    setUploading(true);
+    try {
+      await onUpload(fd);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDownload(path: string) {
+    const url = await onGetDownloadUrl(path);
+    if (url) window.open(url, "_blank");
+  }
+
   return (
-    <Card>
-      <p className="text-sm text-ink-soft mb-2">Not built yet — next up after the applicant-facing flow is working end to end.</p>
-      <ul className="list-disc pl-5 text-sm text-ink-soft flex flex-col gap-1">
-        {items.map((i) => (
-          <li key={i}>{i}</li>
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <div className="rounded border border-line bg-surface divide-y divide-line">
+        {documents.length === 0 && <p className="p-4 text-sm text-ink-soft">Nothing uploaded yet.</p>}
+        {documents.map((d) => (
+          <div key={d.id} className="p-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-ink capitalize">{d.category.replace(/_/g, " ")}</p>
+              <p className="text-xs text-ink-soft tabular">{new Date(d.created_at).toLocaleDateString()}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {d.is_sensitive && <span className="text-xs rounded-full px-2 py-0.5 bg-warn-bg text-warn">Sensitive</span>}
+              <button onClick={() => handleDownload(d.storage_path)} className="text-xs text-accent hover:underline">
+                Download
+              </button>
+            </div>
+          </div>
         ))}
-      </ul>
-    </Card>
+      </div>
+
+      <Card>
+        <h3 className="text-sm font-semibold text-ink mb-3">Upload a document</h3>
+        <form action={handleUpload} className="flex flex-col gap-3">
+          <select name="category" required className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+            {DOCUMENT_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="is_sensitive" className="rounded border-line" />
+            Sensitive — restrict to owner/staff only
+          </label>
+          <input
+            type="file"
+            name="file"
+            required
+            className="text-sm text-ink-soft file:mr-3 file:rounded file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:text-ink"
+          />
+          <button
+            type="submit"
+            disabled={uploading}
+            className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong disabled:opacity-60 self-start"
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function Notices({ notices, onAdd }: { notices: Row[]; onAdd: (fd: FormData) => Promise<void> }) {
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <div className="rounded border border-line bg-surface divide-y divide-line">
+        {notices.length === 0 && <p className="p-4 text-sm text-ink-soft">None sent.</p>}
+        {notices.map((n) => (
+          <div key={n.id} className="p-3 flex items-center justify-between">
+            <span className="text-sm text-ink">{n.notice_type}</span>
+            <span className="text-xs text-ink-soft tabular">{new Date(n.sent_at).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      <Card>
+        <h3 className="text-sm font-semibold text-ink mb-3">Log a notice</h3>
+        <form action={onAdd} className="flex flex-col gap-3">
+          <input
+            name="notice_type"
+            required
+            placeholder="Notice type (late rent, entry notice, lease violation…)"
+            className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+          <button type="submit" className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Log notice
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+const MAINTENANCE_TONE: Record<string, string> = { open: "warn", resolved: "good" };
+
+function Maintenance({
+  requests,
+  onAdd,
+  onResolve,
+}: {
+  requests: Row[];
+  onAdd: (fd: FormData) => Promise<void>;
+  onResolve: (id: string) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      <div className="rounded border border-line bg-surface divide-y divide-line">
+        {requests.length === 0 && <p className="p-4 text-sm text-ink-soft">Nothing reported.</p>}
+        {requests.map((r) => (
+          <div key={r.id} className="p-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm text-ink">{r.description}</p>
+              <p className="text-xs text-ink-soft tabular">Reported {new Date(r.reported_at).toLocaleDateString()}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs rounded-full px-2 py-0.5 capitalize ${TONE_CLASSES[MAINTENANCE_TONE[r.status] ?? "flat"]}`}>
+                {r.status}
+              </span>
+              {r.status !== "resolved" && (
+                <form action={async () => onResolve(r.id)}>
+                  <button className="text-xs text-accent hover:underline">Resolve</button>
+                </form>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <Card>
+        <h3 className="text-sm font-semibold text-ink mb-3">Report an issue</h3>
+        <form action={onAdd} className="flex flex-col gap-3">
+          <textarea
+            name="description"
+            required
+            rows={3}
+            placeholder="What's wrong and where"
+            className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+          <button type="submit" className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Report
+          </button>
+        </form>
+      </Card>
+    </div>
   );
 }

@@ -725,3 +725,134 @@ export async function recordNoticeSent(householdId: string, formData: FormData) 
 
   revalidatePath(`/households/${householdId}`);
 }
+
+// ---------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------
+
+export async function uploadDocument(householdId: string, formData: FormData) {
+  const { staff, supabase } = await ctx();
+
+  const file = formData.get("file") as File;
+  const category = String(formData.get("category"));
+  const isSensitive = formData.get("is_sensitive") === "on";
+  if (!file || file.size === 0) throw new Error("Choose a file.");
+
+  const folder = isSensitive ? "sensitive" : "general";
+  const path = `${householdId}/${folder}/${Date.now()}-${file.name}`;
+
+  const { error: uploadError } = await supabase.storage.from("documents").upload(path, file, { upsert: false });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { error } = await supabase.from("documents").insert({
+    household_id: householdId,
+    category: category as
+      | "application"
+      | "applicant_upload"
+      | "verification"
+      | "screening"
+      | "lease"
+      | "lease_option"
+      | "addendum"
+      | "notice"
+      | "payment"
+      | "maintenance"
+      | "photo"
+      | "correspondence"
+      | "other",
+    storage_path: path,
+    is_sensitive: isSensitive,
+    uploaded_by: staff.id,
+  });
+  if (error) throw new Error(error.message);
+
+  await logActivity(supabase, {
+    householdId,
+    entityType: "document",
+    eventType: "document_uploaded",
+    description: `Document uploaded — ${category.replace(/_/g, " ")}${isSensitive ? " (sensitive)" : ""}`,
+    actorId: staff.id,
+  });
+
+  revalidatePath(`/households/${householdId}`);
+}
+
+export async function getDocumentDownloadUrl(path: string) {
+  const { supabase } = await ctx();
+  const { data } = await supabase.storage.from("documents").createSignedUrl(path, 60 * 5);
+  return data?.signedUrl ?? null;
+}
+
+// ---------------------------------------------------------------------
+// Notices
+// ---------------------------------------------------------------------
+
+export async function addNotice(householdId: string, formData: FormData) {
+  const { staff, supabase } = await ctx();
+
+  const noticeType = String(formData.get("notice_type"));
+  const { error } = await supabase.from("notices").insert({
+    household_id: householdId,
+    notice_type: noticeType,
+  });
+  if (error) throw new Error(error.message);
+
+  await logActivity(supabase, {
+    householdId,
+    entityType: "notice",
+    eventType: "notice_sent",
+    description: `Notice sent — ${noticeType}`,
+    actorId: staff.id,
+  });
+
+  revalidatePath(`/households/${householdId}`);
+}
+
+// ---------------------------------------------------------------------
+// Maintenance
+// ---------------------------------------------------------------------
+
+export async function addMaintenanceRequest(householdId: string, formData: FormData) {
+  const { staff, supabase } = await ctx();
+
+  const { data: household } = await supabase.from("households").select("property_id").eq("id", householdId).single();
+  if (!household?.property_id) throw new Error("Household has no property assigned.");
+
+  const { error } = await supabase.from("maintenance_requests").insert({
+    property_id: household.property_id,
+    household_id: householdId,
+    description: String(formData.get("description")),
+  });
+  if (error) throw new Error(error.message);
+
+  await logActivity(supabase, {
+    householdId,
+    entityType: "maintenance_request",
+    eventType: "maintenance_reported",
+    description: `Maintenance reported — ${String(formData.get("description")).slice(0, 80)}`,
+    actorId: staff.id,
+  });
+
+  revalidatePath(`/households/${householdId}`);
+}
+
+export async function resolveMaintenanceRequest(householdId: string, requestId: string) {
+  const { staff, supabase } = await ctx();
+
+  const { error } = await supabase
+    .from("maintenance_requests")
+    .update({ status: "resolved", resolved_at: new Date().toISOString() })
+    .eq("id", requestId);
+  if (error) throw new Error(error.message);
+
+  await logActivity(supabase, {
+    householdId,
+    entityType: "maintenance_request",
+    entityId: requestId,
+    eventType: "maintenance_resolved",
+    description: "Maintenance request resolved",
+    actorId: staff.id,
+  });
+
+  revalidatePath(`/households/${householdId}`);
+}
