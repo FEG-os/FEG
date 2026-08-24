@@ -11,6 +11,9 @@ import {
   addCommunication,
   addTask,
   completeTask,
+  sendAgreement,
+  refreshAgreementStatus,
+  getAgreementDownloadUrl,
 } from "./actions";
 
 export default async function HouseholdDetailPage({ params }: PageProps<"/households/[id]">) {
@@ -33,6 +36,7 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
     { data: communications },
     { data: tasks },
     { data: activity },
+    { data: agreements },
   ] = await Promise.all([
     supabase.from("people").select("*").eq("household_id", id).order("created_at"),
     supabase
@@ -44,6 +48,7 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
     supabase.from("communications").select("*").eq("household_id", id).order("occurred_at", { ascending: false }),
     supabase.from("tasks").select("*").eq("household_id", id).order("due_date"),
     supabase.from("activity_log").select("*").eq("household_id", id).order("occurred_at", { ascending: false }),
+    supabase.from("agreements").select("*").eq("household_id", id).order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -55,6 +60,7 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
       communications={communications ?? []}
       tasks={tasks ?? []}
       activity={activity ?? []}
+      agreements={agreements ?? []}
       actions={{
         updateStage: updateStage.bind(null, id),
         updateOverview: updateOverview.bind(null, id),
@@ -64,6 +70,9 @@ export default async function HouseholdDetailPage({ params }: PageProps<"/househ
         addCommunication: addCommunication.bind(null, id),
         addTask: addTask.bind(null, id),
         completeTask: completeTask.bind(null, id),
+        sendAgreement: sendAgreement.bind(null, id),
+        refreshAgreementStatus: refreshAgreementStatus.bind(null, id),
+        getAgreementDownloadUrl,
       }}
     />
   );

@@ -34,7 +34,9 @@ export async function proxy(request: NextRequest) {
   const isPublicPath =
     pathname.startsWith("/apply") ||
     pathname.startsWith("/login") ||
-    pathname.startsWith("/api");
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/brand") ||
+    /\.[a-zA-Z0-9]+$/.test(pathname); // static assets (icons, images, etc.)
 
   if (!user && !isPublicPath) {
     const loginUrl = new URL("/login", request.url);

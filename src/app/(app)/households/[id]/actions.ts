@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/staff";
 import { logActivity } from "@/lib/activity";
 import { STAGE_LABELS, type PipelineStage } from "@/lib/pipeline";
+import { sendSignatureRequest, getSignatureRequest, downloadExecutedFile } from "@/lib/dropboxsign";
 
 async function ctx() {
   const staff = await requireStaff();
@@ -238,4 +239,126 @@ export async function completeTask(taskId: string, householdId: string) {
   const { supabase } = await ctx();
   await supabase.from("tasks").update({ status: "done" }).eq("id", taskId);
   revalidatePath(`/households/${householdId}`);
+}
+
+// Sends a staff-provided lease PDF out for signature via Dropbox Sign.
+// We never generate lease legal language ourselves — staff upload their
+// own (attorney-reviewed) document; this just handles the e-signature
+// workflow around it.
+export async function sendAgreement(householdId: string, formData: FormData) {
+  const { staff, supabase } = await ctx();
+
+  const agreementType = String(formData.get("agreement_type")) as "traditional_lease" | "lease_option";
+  const file = formData.get("file") as File;
+  const signerIds = formData.getAll("signer_ids") as string[];
+  if (!file || file.size === 0) throw new Error("Attach a lease document.");
+  if (signerIds.length === 0) throw new Error("Select at least one signer.");
+
+  const { data: people } = await supabase
+    .from("people")
+    .select("id, first_name, last_name, email")
+    .in("id", signerIds);
+
+  const signers = (people ?? []).map((p) => ({
+    name: `${p.first_name} ${p.last_name}`,
+    email: p.email ?? "",
+  }));
+  if (signers.some((s) => !s.email)) throw new Error("Every signer needs an email on file.");
+
+  const { data: property } = await supabase
+    .from("households")
+    .select("properties(name)")
+    .eq("id", householdId)
+    .single();
+
+  const title = `${property?.properties?.name ?? "Lease"} — ${agreementType === "lease_option" ? "Lease with Option to Purchase" : "Lease Agreement"}`;
+
+  const result = await sendSignatureRequest({
+    title,
+    subject: `Please sign: ${title}`,
+    signers,
+    file,
+  });
+
+  const { data: agreement, error } = await supabase
+    .from("agreements")
+    .insert({
+      household_id: householdId,
+      agreement_type: agreementType,
+      dropbox_sign_request_id: result.signature_request_id,
+      status: "sent",
+      signers,
+      sent_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !agreement) throw new Error(error?.message ?? "Could not save agreement record");
+
+  await logActivity(supabase, {
+    householdId,
+    entityType: "agreement",
+    entityId: agreement.id,
+    eventType: "agreement_sent",
+    description: `${title} sent for signature (${signers.map((s) => s.name).join(", ")})`,
+    actorId: staff.id,
+  });
+
+  revalidatePath(`/households/${householdId}`);
+}
+
+export async function refreshAgreementStatus(householdId: string, agreementId: string) {
+  const { staff, supabase } = await ctx();
+
+  const { data: agreement } = await supabase
+    .from("agreements")
+    .select("id, dropbox_sign_request_id, status")
+    .eq("id", agreementId)
+    .single();
+  if (!agreement?.dropbox_sign_request_id) return;
+
+  const remote = await getSignatureRequest(agreement.dropbox_sign_request_id);
+
+  let status: "sent" | "partially_signed" | "completed" | "declined" = "sent";
+  if (remote.is_declined) status = "declined";
+  else if (remote.is_complete) status = "completed";
+  else if (remote.signatures.some((s) => s.status_code === "signed")) status = "partially_signed";
+
+  const patch: {
+    status: "sent" | "partially_signed" | "completed" | "declined";
+    executed_document_path?: string;
+    completed_at?: string;
+  } = { status };
+
+  if (status === "completed" && agreement.status !== "completed") {
+    const fileBuffer = await downloadExecutedFile(agreement.dropbox_sign_request_id);
+    const path = `${householdId}/${agreementId}.pdf`;
+    await supabase.storage.from("agreements").upload(path, fileBuffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    patch.executed_document_path = path;
+    patch.completed_at = new Date().toISOString();
+  }
+
+  await supabase.from("agreements").update(patch).eq("id", agreementId);
+
+  if (status === "completed" && agreement.status !== "completed") {
+    await logActivity(supabase, {
+      householdId,
+      entityType: "agreement",
+      entityId: agreementId,
+      eventType: "agreement_completed",
+      description: "All parties have signed — executed document saved",
+      actorId: staff.id,
+    });
+    await supabase.from("households").update({ pipeline_stage: "lease_signed" }).eq("id", householdId);
+  }
+
+  revalidatePath(`/households/${householdId}`);
+}
+
+export async function getAgreementDownloadUrl(path: string) {
+  const { supabase } = await ctx();
+  const { data } = await supabase.storage.from("agreements").createSignedUrl(path, 60 * 5);
+  return data?.signedUrl ?? null;
 }

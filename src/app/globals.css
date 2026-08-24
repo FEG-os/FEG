@@ -1,22 +1,25 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap");
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f6f2;
-  --surface: #ffffff;
-  --surface-2: #f0efe8;
-  --ink: #1f2420;
-  --ink-soft: #5b6158;
-  --line: #ddd9cc;
-  --accent: #3f5d4a;
-  --accent-ink: #ffffff;
-  --good: #2f7a45;
-  --good-bg: #e4f3e6;
-  --warn: #92650f;
-  --warn-bg: #faefd6;
-  --crit: #9c3b3b;
-  --crit-bg: #fbe6e4;
-  --info: #2f5f82;
-  --info-bg: #e4eff7;
+  --bg: #0c0b0a;
+  --surface: #17150f;
+  --surface-2: #201d15;
+  --ink: #f3efe4;
+  --ink-soft: #a89d84;
+  --line: #322c1e;
+  --line-strong: #4a4025;
+  --accent: #cca43b;
+  --accent-strong: #e6c667;
+  --accent-ink: #16130a;
+  --good: #6fbf7e;
+  --good-bg: #17281c;
+  --warn: #e0b84b;
+  --warn-bg: #2c2410;
+  --crit: #e08585;
+  --crit-bg: #2c1817;
+  --info: #7fb3d9;
+  --info-bg: #142530;
 }
 
 @theme inline {
@@ -26,7 +29,9 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-ink: var(--accent-ink);
   --color-good: var(--good);
   --color-good-bg: var(--good-bg);
@@ -36,6 +41,7 @@
   --color-crit-bg: var(--crit-bg);
   --color-info: var(--info);
   --color-info-bg: var(--info-bg);
+  --font-display: "Playfair Display", ui-serif, Georgia, serif;
 }
 
 body {
@@ -44,6 +50,17 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+h1, h2, .font-display {
+  font-family: var(--font-display);
+}
+
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.brand-eyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
 }

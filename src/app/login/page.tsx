@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { signIn } from "./actions";
 
 export default async function LoginPage({
@@ -9,8 +10,12 @@ export default async function LoginPage({
   return (
     <main className="flex-1 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-xl font-semibold text-ink mb-1">Household Ledger</h1>
-        <p className="text-sm text-ink-soft mb-6">Sign in to continue.</p>
+        <div className="flex justify-center mb-6">
+          <Image src="/brand/feg-circle.png" alt="Flores Equity Group" width={88} height={88} className="rounded-full" priority />
+        </div>
+        <p className="brand-eyebrow text-center mb-1">Flores Equity Group</p>
+        <h1 className="font-display text-xl text-ink text-center mb-1">Household Ledger</h1>
+        <p className="text-sm text-ink-soft text-center mb-8">Sign in to continue.</p>
 
         {error && (
           <div className="mb-4 rounded border border-crit/30 bg-crit-bg px-3 py-2 text-sm text-crit">
@@ -49,7 +54,7 @@ export default async function LoginPage({
           </div>
           <button
             type="submit"
-            className="mt-2 rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:opacity-90"
+            className="mt-2 rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong"
           >
             Sign in
           </button>

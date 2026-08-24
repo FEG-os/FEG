@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Household Ledger",
-  description: "Rental applicant and tenant management",
+  title: "FEG Household Ledger",
+  description: "Flores Equity Group — rental applicant and tenant management",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

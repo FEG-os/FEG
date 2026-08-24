@@ -7,6 +7,7 @@ const TABS = [
   "Overview",
   "People",
   "Application",
+  "Agreements",
   "Payments",
   "Communications",
   "Tasks",
@@ -29,6 +30,7 @@ export default function HouseholdView({
   communications,
   tasks,
   activity,
+  agreements,
   actions,
 }: {
   household: Row;
@@ -38,8 +40,9 @@ export default function HouseholdView({
   communications: Row[];
   tasks: Row[];
   activity: Row[];
+  agreements: Row[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  actions: Record<string, (...args: any[]) => Promise<void>>;
+  actions: Record<string, (...args: any[]) => Promise<any>>;
 }) {
   const [tab, setTab] = useState<Tab>("Overview");
   const primary = people.find((p) => p.is_adult) ?? people[0];
@@ -88,6 +91,15 @@ export default function HouseholdView({
       {tab === "People" && <People people={people} action={actions.addPerson} />}
       {tab === "Application" && (
         <ApplicationTab applications={applications} onSend={actions.sendApplication} adults={people.filter((p) => p.is_adult).length} />
+      )}
+      {tab === "Agreements" && (
+        <Agreements
+          agreements={agreements}
+          adults={people.filter((p) => p.is_adult)}
+          onSend={actions.sendAgreement}
+          onRefresh={actions.refreshAgreementStatus}
+          onGetDownloadUrl={actions.getAgreementDownloadUrl}
+        />
       )}
       {tab === "Payments" && <Payments payments={payments} action={actions.recordPayment} />}
       {tab === "Communications" && <Communications items={communications} action={actions.addCommunication} />}
@@ -394,6 +406,155 @@ function Activity({ items }: { items: Row[] }) {
   );
 }
 
+const AGREEMENT_STATUS_TONE: Record<string, string> = {
+  draft: "flat",
+  generated: "flat",
+  sent: "info",
+  partially_signed: "warn",
+  completed: "good",
+  declined: "crit",
+};
+
+function Agreements({
+  agreements,
+  adults,
+  onSend,
+  onRefresh,
+  onGetDownloadUrl,
+}: {
+  agreements: Row[];
+  adults: Row[];
+  onSend: (fd: FormData) => Promise<void>;
+  onRefresh: (agreementId: string) => Promise<void>;
+  onGetDownloadUrl: (path: string) => Promise<string | null>;
+}) {
+  const [sending, setSending] = useState(false);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const missingEmail = adults.filter((a) => !a.email);
+
+  async function handleSend(fd: FormData) {
+    setSending(true);
+    try {
+      await onSend(fd);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleRefresh(id: string) {
+    setRefreshingId(id);
+    try {
+      await onRefresh(id);
+    } finally {
+      setRefreshingId(null);
+    }
+  }
+
+  async function handleDownload(path: string) {
+    const url = await onGetDownloadUrl(path);
+    if (url) window.open(url, "_blank");
+  }
+
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      {agreements.length === 0 && (
+        <p className="text-sm text-ink-soft">Nothing sent yet.</p>
+      )}
+
+      {agreements.map((a) => (
+        <Card key={a.id}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-ink capitalize">
+              {a.agreement_type === "lease_option" ? "Lease with option to purchase" : "Traditional lease"}
+            </span>
+            <span
+              className={`text-xs rounded-full px-2 py-0.5 capitalize ${
+                {
+                  flat: "bg-surface-2 text-ink-soft",
+                  info: "bg-info-bg text-info",
+                  warn: "bg-warn-bg text-warn",
+                  good: "bg-good-bg text-good",
+                  crit: "bg-crit-bg text-crit",
+                }[AGREEMENT_STATUS_TONE[a.status] ?? "flat"]
+              }`}
+            >
+              {String(a.status).replace(/_/g, " ")}
+            </span>
+          </div>
+          <p className="text-xs text-ink-soft mb-2">
+            Signers: {(a.signers ?? []).map((s: { name: string }) => s.name).join(", ")}
+          </p>
+          <div className="flex items-center gap-3">
+            {a.status !== "completed" && a.status !== "declined" && (
+              <button
+                onClick={() => handleRefresh(a.id)}
+                disabled={refreshingId === a.id}
+                className="text-xs text-accent hover:underline disabled:opacity-60"
+              >
+                {refreshingId === a.id ? "Checking…" : "Refresh status"}
+              </button>
+            )}
+            {a.executed_document_path && (
+              <button onClick={() => handleDownload(a.executed_document_path)} className="text-xs text-accent hover:underline">
+                Download executed PDF
+              </button>
+            )}
+          </div>
+        </Card>
+      ))}
+
+      <Card>
+        <h3 className="text-sm font-semibold text-ink mb-1">Send a new agreement</h3>
+        <p className="text-xs text-ink-soft mb-3">
+          Upload your own lease document (PDF) — this app never generates lease language itself. Dropbox Sign handles
+          the signatures; each adult signer needs an email on file.
+        </p>
+        {missingEmail.length > 0 && (
+          <p className="text-xs text-warn mb-3">
+            Missing email for: {missingEmail.map((p) => `${p.first_name} ${p.last_name}`).join(", ")} — add it under People first.
+          </p>
+        )}
+        <form action={handleSend} className="flex flex-col gap-3">
+          <select name="agreement_type" required className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+            <option value="traditional_lease">Traditional lease</option>
+            <option value="lease_option">Lease with option to purchase</option>
+          </select>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-ink-soft">Signers</span>
+            {adults.map((a) => (
+              <label key={a.id} className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  name="signer_ids"
+                  value={a.id}
+                  defaultChecked={Boolean(a.email)}
+                  className="rounded border-line"
+                  disabled={!a.email}
+                />
+                {a.first_name} {a.last_name} {!a.email && <span className="text-warn text-xs">(no email)</span>}
+              </label>
+            ))}
+          </div>
+          <input
+            type="file"
+            name="file"
+            accept="application/pdf"
+            required
+            className="text-sm text-ink-soft file:mr-3 file:rounded file:border-0 file:bg-surface-2 file:px-3 file:py-1.5 file:text-sm file:text-ink"
+          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong disabled:opacity-60 self-start"
+          >
+            {sending ? "Sending…" : "Send for signature"}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
 function Roadmap() {
   const items = [
     "Screening — RentPrep request tracking",
@@ -401,7 +562,6 @@ function Roadmap() {
     "Discrepancies",
     "Decision notes",
     "Documents",
-    "Lease / lease-option agreements (Dropbox Sign)",
     "Notices",
     "Maintenance",
   ];
