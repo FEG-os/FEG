@@ -7,6 +7,10 @@ const TABS = [
   "Overview",
   "People",
   "Application",
+  "Screening",
+  "Verification",
+  "Discrepancies",
+  "Decision",
   "Agreements",
   "Payments",
   "Communications",
@@ -22,6 +26,14 @@ type Tab = (typeof TABS)[number];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = any;
 
+const TONE_CLASSES: Record<string, string> = {
+  flat: "bg-surface-2 text-ink-soft",
+  info: "bg-info-bg text-info",
+  warn: "bg-warn-bg text-warn",
+  good: "bg-good-bg text-good",
+  crit: "bg-crit-bg text-crit",
+};
+
 export default function HouseholdView({
   household,
   people,
@@ -31,6 +43,10 @@ export default function HouseholdView({
   tasks,
   activity,
   agreements,
+  applicantProfiles,
+  discrepancies,
+  decisions,
+  latestApplicationId,
   actions,
 }: {
   household: Row;
@@ -41,6 +57,10 @@ export default function HouseholdView({
   tasks: Row[];
   activity: Row[];
   agreements: Row[];
+  applicantProfiles: Row[];
+  discrepancies: Row[];
+  decisions: Row[];
+  latestApplicationId: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   actions: Record<string, (...args: any[]) => Promise<any>>;
 }) {
@@ -91,6 +111,29 @@ export default function HouseholdView({
       {tab === "People" && <People people={people} action={actions.addPerson} />}
       {tab === "Application" && (
         <ApplicationTab applications={applications} onSend={actions.sendApplication} adults={people.filter((p) => p.is_adult).length} />
+      )}
+      {tab === "Screening" && (
+        <Screening applicantProfiles={applicantProfiles} onRequest={actions.requestScreening} onUpdateStatus={actions.updateScreeningStatus} />
+      )}
+      {tab === "Verification" && (
+        <Verification
+          applicantProfiles={applicantProfiles}
+          onSaveLandlord={actions.saveLandlordVerification}
+          onSaveEmployment={actions.saveEmploymentVerification}
+          onSaveReference={actions.saveReferenceCheck}
+        />
+      )}
+      {tab === "Discrepancies" && (
+        <Discrepancies
+          discrepancies={discrepancies}
+          applicantProfiles={applicantProfiles}
+          applicationId={latestApplicationId}
+          onAdd={actions.addDiscrepancy}
+          onUpdateStatus={actions.updateDiscrepancyStatus}
+        />
+      )}
+      {tab === "Decision" && (
+        <Decision decisions={decisions} onRecord={actions.recordDecision} onRecordNotice={actions.recordNoticeSent} />
       )}
       {tab === "Agreements" && (
         <Agreements
@@ -468,15 +511,7 @@ function Agreements({
               {a.agreement_type === "lease_option" ? "Lease with option to purchase" : "Traditional lease"}
             </span>
             <span
-              className={`text-xs rounded-full px-2 py-0.5 capitalize ${
-                {
-                  flat: "bg-surface-2 text-ink-soft",
-                  info: "bg-info-bg text-info",
-                  warn: "bg-warn-bg text-warn",
-                  good: "bg-good-bg text-good",
-                  crit: "bg-crit-bg text-crit",
-                }[AGREEMENT_STATUS_TONE[a.status] ?? "flat"]
-              }`}
+              className={`text-xs rounded-full px-2 py-0.5 capitalize ${TONE_CLASSES[AGREEMENT_STATUS_TONE[a.status] ?? "flat"]}`}
             >
               {String(a.status).replace(/_/g, " ")}
             </span>
@@ -555,16 +590,592 @@ function Agreements({
   );
 }
 
+const SCREENING_TYPES = [
+  { value: "complete", label: "RentPrep Complete" },
+  { value: "income_verification", label: "Income Verification" },
+];
+
+const SCREENING_TONE: Record<string, string> = {
+  not_started: "flat",
+  requested: "info",
+  pending: "warn",
+  completed: "good",
+  could_not_complete: "crit",
+};
+
+function Screening({
+  applicantProfiles,
+  onRequest,
+  onUpdateStatus,
+}: {
+  applicantProfiles: Row[];
+  onRequest: (fd: FormData) => Promise<void>;
+  onUpdateStatus: (fd: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      {applicantProfiles.length === 0 && <p className="text-sm text-ink-soft">No submitted application yet.</p>}
+      {applicantProfiles.map((ap) => (
+        <Card key={ap.id}>
+          <h3 className="text-sm font-semibold text-ink mb-3">
+            {ap.people?.first_name} {ap.people?.last_name}
+          </h3>
+          <div className="flex flex-col gap-2 mb-3">
+            {(ap.screenings ?? []).length === 0 && <p className="text-xs text-ink-soft">No screening requested yet.</p>}
+            {(ap.screenings ?? []).map((s: Row) => (
+              <ScreeningRow key={s.id} screening={s} onUpdateStatus={onUpdateStatus} />
+            ))}
+          </div>
+          <form action={onRequest} className="flex items-center gap-2">
+            <input type="hidden" name="applicant_profile_id" value={ap.id} />
+            <select
+              name="screening_type"
+              className="rounded border border-line bg-surface px-2 py-1.5 text-sm outline-none focus:border-accent"
+            >
+              {SCREENING_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink hover:bg-accent-strong">
+              Start screening
+            </button>
+          </form>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ScreeningRow({ screening, onUpdateStatus }: { screening: Row; onUpdateStatus: (fd: FormData) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="rounded border border-line p-2.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-ink capitalize">{screening.screening_type.replace(/_/g, " ")}</span>
+        <span className={`text-xs rounded-full px-2 py-0.5 capitalize ${TONE_CLASSES[SCREENING_TONE[screening.status] ?? "flat"]}`}>
+          {screening.status.replace(/_/g, " ")}
+        </span>
+      </div>
+      {screening.outcome_summary && <p className="text-xs text-ink-soft mt-1">{screening.outcome_summary}</p>}
+      {screening.status !== "completed" && screening.status !== "could_not_complete" && (
+        <div className="mt-2">
+          {!editing ? (
+            <button onClick={() => setEditing(true)} className="text-xs text-accent hover:underline">
+              Mark outcome
+            </button>
+          ) : (
+            <form action={onUpdateStatus} className="flex flex-col gap-2 mt-1">
+              <input type="hidden" name="screening_id" value={screening.id} />
+              <select
+                name="status"
+                defaultValue="completed"
+                className="rounded border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
+              >
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="could_not_complete">Could not complete</option>
+              </select>
+              <textarea
+                name="outcome_summary"
+                placeholder="Lawful summary of the outcome (not the raw report)"
+                rows={2}
+                className="rounded border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
+              />
+              <button
+                type="submit"
+                className="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-ink hover:bg-accent-strong self-start"
+              >
+                Save
+              </button>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Verification({
+  applicantProfiles,
+  onSaveLandlord,
+  onSaveEmployment,
+  onSaveReference,
+}: {
+  applicantProfiles: Row[];
+  onSaveLandlord: (fd: FormData) => Promise<void>;
+  onSaveEmployment: (fd: FormData) => Promise<void>;
+  onSaveReference: (fd: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl">
+      {applicantProfiles.length === 0 && <p className="text-sm text-ink-soft">No submitted application yet.</p>}
+      {applicantProfiles.map((ap) => (
+        <div key={ap.id} className="flex flex-col gap-4">
+          <h3 className="font-display text-base text-ink">
+            {ap.people?.first_name} {ap.people?.last_name}
+          </h3>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">Residence history</h4>
+            <div className="flex flex-col gap-3">
+              {(ap.residence_history ?? []).length === 0 && <p className="text-xs text-ink-soft">None disclosed.</p>}
+              {(ap.residence_history ?? []).map((r: Row) => (
+                <LandlordVerificationCard key={r.id} residence={r} onSave={onSaveLandlord} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">Employment</h4>
+            <div className="flex flex-col gap-3">
+              {(ap.employment_history ?? []).length === 0 && <p className="text-xs text-ink-soft">None disclosed.</p>}
+              {(ap.employment_history ?? []).map((e: Row) => (
+                <EmploymentVerificationCard key={e.id} employment={e} onSave={onSaveEmployment} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-soft mb-2">References</h4>
+            <div className="flex flex-col gap-3">
+              {(ap.applicant_references ?? []).length === 0 && <p className="text-xs text-ink-soft">None disclosed.</p>}
+              {(ap.applicant_references ?? []).map((r: Row) => (
+                <ReferenceCheckCard key={r.id} reference={r} onSave={onSaveReference} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const fieldCls = "rounded border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-accent";
+
+function LandlordVerificationCard({ residence, onSave }: { residence: Row; onSave: (fd: FormData) => Promise<void> }) {
+  const v = residence.landlord_verifications?.[0];
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded border border-line p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-ink">{residence.address}</p>
+          <p className="text-xs text-ink-soft">
+            {residence.move_in_date ?? "?"} – {residence.move_out_date ?? "present"} · ${residence.rent_amount ?? "?"}/mo · Landlord:{" "}
+            {residence.landlord_name ?? "—"} {residence.landlord_phone ?? ""}
+          </p>
+        </div>
+        <span className={`text-xs rounded-full px-2 py-0.5 whitespace-nowrap ${v?.verified_at ? TONE_CLASSES.good : TONE_CLASSES.flat}`}>
+          {v?.verified_at ? "Verified" : "Not verified"}
+        </span>
+      </div>
+      <button onClick={() => setOpen(!open)} className="text-xs text-accent hover:underline mt-2">
+        {open ? "Hide" : v ? "Edit verification" : "Verify landlord"}
+      </button>
+      {open && (
+        <form key={v?.verified_at ?? "new"} action={onSave} className="flex flex-col gap-2 mt-3">
+          <input type="hidden" name="residence_history_id" value={residence.id} />
+          {v && <input type="hidden" name="verification_id" value={v.id} />}
+          <div className="grid grid-cols-2 gap-2">
+            <input name="phone_used" defaultValue={v?.phone_used ?? residence.landlord_phone ?? ""} placeholder="Phone used" className={fieldCls} />
+            <input name="email_used" defaultValue={v?.email_used ?? residence.landlord_email ?? ""} placeholder="Email used" className={fieldCls} />
+          </div>
+          <label className="flex items-start gap-2 text-xs text-ink">
+            <input type="checkbox" name="independently_verified" defaultChecked={v?.independently_verified} className="mt-0.5 rounded border-line" />
+            Independently confirmed this contact owns/manages the property, rather than just trusting the number the applicant gave
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <input name="person_spoken_to" defaultValue={v?.person_spoken_to ?? ""} placeholder="Person spoken to" className={fieldCls} />
+            <input
+              name="relationship_to_property"
+              defaultValue={v?.relationship_to_property ?? ""}
+              placeholder="Their relationship to property"
+              className={fieldCls}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="tenancy_dates_confirmed" defaultChecked={v?.tenancy_dates_confirmed} className="rounded border-line" />
+            Tenancy dates confirmed
+          </label>
+          <textarea name="rent_payment_history_notes" defaultValue={v?.rent_payment_history_notes ?? ""} placeholder="Rent / payment history" rows={2} className={fieldCls} />
+          <textarea name="lease_violations_notes" defaultValue={v?.lease_violations_notes ?? ""} placeholder="Lease violations (if lawfully relevant)" rows={2} className={fieldCls} />
+          <textarea name="property_condition_notes" defaultValue={v?.property_condition_notes ?? ""} placeholder="Property condition on move-out" rows={2} className={fieldCls} />
+          <textarea name="notice_given_notes" defaultValue={v?.notice_given_notes ?? ""} placeholder="Notice given" rows={2} className={fieldCls} />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-ink-soft">Would rent again?</label>
+            <select name="would_rent_again" defaultValue={v?.would_rent_again ?? "unknown"} className={fieldCls}>
+              <option value="unknown">Unknown</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+          <textarea name="notes" defaultValue={v?.notes ?? ""} placeholder="Other notes" rows={2} className={fieldCls} />
+          <button type="submit" className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Save verification
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function EmploymentVerificationCard({ employment, onSave }: { employment: Row; onSave: (fd: FormData) => Promise<void> }) {
+  const v = employment.employment_verifications?.[0];
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded border border-line p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-ink">
+            {employment.employer_name} {employment.is_current && <span className="text-xs text-ink-soft">(current)</span>}
+          </p>
+          <p className="text-xs text-ink-soft">
+            {employment.position ?? "—"} · {employment.employer_phone ?? "no phone"} · ${employment.income_amount ?? "?"}{" "}
+            {employment.income_frequency}
+          </p>
+        </div>
+        <span className={`text-xs rounded-full px-2 py-0.5 whitespace-nowrap ${v?.verified_at ? TONE_CLASSES.good : TONE_CLASSES.flat}`}>
+          {v?.verified_at ? "Verified" : "Not verified"}
+        </span>
+      </div>
+      <button onClick={() => setOpen(!open)} className="text-xs text-accent hover:underline mt-2">
+        {open ? "Hide" : v ? "Edit verification" : "Verify employment"}
+      </button>
+      {open && (
+        <form key={v?.verified_at ?? "new"} action={onSave} className="flex flex-col gap-2 mt-3">
+          <input type="hidden" name="employment_history_id" value={employment.id} />
+          {v && <input type="hidden" name="verification_id" value={v.id} />}
+          <div className="grid grid-cols-2 gap-2">
+            <input name="method" defaultValue={v?.method ?? ""} placeholder="Method (call, paystub…)" className={fieldCls} />
+            <input name="source_person" defaultValue={v?.source_person ?? ""} placeholder="Source / person contacted" className={fieldCls} />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="verified" defaultChecked={v?.verified} className="rounded border-line" />
+            Employer verified
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="dates_confirmed" defaultChecked={v?.dates_confirmed} className="rounded border-line" />
+            Employment dates confirmed
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="income_verified" defaultChecked={v?.income_verified} className="rounded border-line" />
+            Income verified
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="bank_income_verification_completed" defaultChecked={v?.bank_income_verification_completed} className="rounded border-line" />
+            RentPrep bank-income verification completed
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink">
+            <input type="checkbox" name="follow_up_required" defaultChecked={v?.follow_up_required} className="rounded border-line" />
+            Follow-up required
+          </label>
+          <textarea name="discrepancies_notes" defaultValue={v?.discrepancies_notes ?? ""} placeholder="Discrepancies" rows={2} className={fieldCls} />
+          <textarea name="notes" defaultValue={v?.notes ?? ""} placeholder="Notes" rows={2} className={fieldCls} />
+          <button type="submit" className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Save verification
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function ReferenceCheckCard({ reference, onSave }: { reference: Row; onSave: (fd: FormData) => Promise<void> }) {
+  const c = reference.reference_checks?.[0];
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded border border-line p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-ink">
+            {reference.name} <span className="text-xs text-ink-soft">({reference.reference_type ?? reference.relationship ?? "reference"})</span>
+          </p>
+          <p className="text-xs text-ink-soft">
+            {reference.phone ?? "—"} · {reference.email ?? "—"}
+          </p>
+        </div>
+        <span className={`text-xs rounded-full px-2 py-0.5 whitespace-nowrap ${c?.contact_attempted ? TONE_CLASSES.good : TONE_CLASSES.flat}`}>
+          {c?.contact_attempted ? "Contacted" : "Not contacted"}
+        </span>
+      </div>
+      <button onClick={() => setOpen(!open)} className="text-xs text-accent hover:underline mt-2">
+        {open ? "Hide" : c ? "Edit" : "Log contact"}
+      </button>
+      {open && (
+        <form key={c?.verified_at ?? "new"} action={onSave} className="flex flex-col gap-2 mt-3">
+          <input type="hidden" name="applicant_reference_id" value={reference.id} />
+          {c && <input type="hidden" name="check_id" value={c.id} />}
+          <input name="outcome" defaultValue={c?.outcome ?? ""} placeholder="Outcome" className={fieldCls} />
+          <textarea name="notes" defaultValue={c?.notes ?? ""} placeholder="Notes" rows={2} className={fieldCls} />
+          <button type="submit" className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Save
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+const DISCREPANCY_CATEGORIES = [
+  "address_not_disclosed",
+  "employment_dates_inconsistent",
+  "income_discrepancy",
+  "landlord_identity_unverified",
+  "rental_dates_inconsistent",
+  "material_information_omitted",
+  "other",
+];
+
+const DISCREPANCY_STATUSES = ["open", "clarification_requested", "explanation_received", "verified", "resolved", "unresolved"];
+
+const DISCREPANCY_TONE: Record<string, string> = {
+  open: "warn",
+  clarification_requested: "info",
+  explanation_received: "info",
+  verified: "good",
+  resolved: "good",
+  unresolved: "crit",
+};
+
+function Discrepancies({
+  discrepancies,
+  applicantProfiles,
+  applicationId,
+  onAdd,
+  onUpdateStatus,
+}: {
+  discrepancies: Row[];
+  applicantProfiles: Row[];
+  applicationId: string | null;
+  onAdd: (fd: FormData) => Promise<void>;
+  onUpdateStatus: (fd: FormData) => Promise<void>;
+}) {
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      {discrepancies.length === 0 && <p className="text-sm text-ink-soft">None flagged.</p>}
+      {discrepancies.map((d) => (
+        <DiscrepancyCard key={d.id} discrepancy={d} onUpdateStatus={onUpdateStatus} />
+      ))}
+      {applicationId && (
+        <Card>
+          <h3 className="text-sm font-semibold text-ink mb-3">Flag a discrepancy</h3>
+          <p className="text-xs text-ink-soft mb-3">
+            A discrepancy isn&apos;t automatically proof someone lied — it&apos;s a flag to follow up on.
+          </p>
+          <form action={onAdd} className="flex flex-col gap-3">
+            <input type="hidden" name="application_id" value={applicationId} />
+            <select name="person_id" className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+              <option value="">Household-wide</option>
+              {applicantProfiles.map((ap) => (
+                <option key={ap.person_id} value={ap.person_id}>
+                  {ap.people?.first_name} {ap.people?.last_name}
+                </option>
+              ))}
+            </select>
+            <select name="category" required className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+              {DISCREPANCY_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+            <textarea
+              name="description"
+              required
+              placeholder="What was found and how"
+              rows={3}
+              className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+            <button type="submit" className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong self-start">
+              Flag it
+            </button>
+          </form>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function DiscrepancyCard({ discrepancy, onUpdateStatus }: { discrepancy: Row; onUpdateStatus: (fd: FormData) => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-ink capitalize">{discrepancy.category.replace(/_/g, " ")}</span>
+        <span className={`text-xs rounded-full px-2 py-0.5 capitalize ${TONE_CLASSES[DISCREPANCY_TONE[discrepancy.status] ?? "flat"]}`}>
+          {discrepancy.status.replace(/_/g, " ")}
+        </span>
+      </div>
+      {discrepancy.people && (
+        <p className="text-xs text-ink-soft mt-0.5">
+          {discrepancy.people.first_name} {discrepancy.people.last_name}
+        </p>
+      )}
+      <p className="text-sm text-ink mt-2">{discrepancy.description}</p>
+      {discrepancy.applicant_explanation && (
+        <p className="text-xs text-ink-soft mt-2">
+          <span className="font-medium text-ink">Explanation:</span> {discrepancy.applicant_explanation}
+        </p>
+      )}
+      {discrepancy.resolution_notes && (
+        <p className="text-xs text-ink-soft mt-1">
+          <span className="font-medium text-ink">Resolution:</span> {discrepancy.resolution_notes}
+        </p>
+      )}
+      {!editing ? (
+        <button onClick={() => setEditing(true)} className="text-xs text-accent hover:underline mt-3">
+          Update
+        </button>
+      ) : (
+        <form action={onUpdateStatus} className="flex flex-col gap-2 mt-3">
+          <input type="hidden" name="discrepancy_id" value={discrepancy.id} />
+          <select
+            key={discrepancy.status}
+            name="status"
+            defaultValue={discrepancy.status}
+            className="rounded border border-line bg-surface px-2 py-1 text-xs outline-none focus:border-accent"
+          >
+            {DISCREPANCY_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, " ")}
+              </option>
+            ))}
+          </select>
+          <textarea name="applicant_explanation" placeholder="Applicant's explanation (if given)" rows={2} className={fieldCls} />
+          <textarea name="resolution_notes" placeholder="Resolution notes" rows={2} className={fieldCls} />
+          <button type="submit" className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Save
+          </button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+const DECISION_FACTORS = [
+  ["ability_to_meet_rent", "Ability to meet monthly rent"],
+  ["ability_to_provide_move_in_funds", "Ability to provide required funds before possession"],
+  ["verified_income", "Verified income / resources"],
+  ["rental_payment_history", "Rental / payment history"],
+  ["credit_information", "Credit information"],
+  ["eviction_history", "Relevant eviction history"],
+  ["application_completeness", "Completeness / accuracy of application"],
+  ["landlord_verification", "Landlord verification"],
+  ["employment_verification", "Employment verification"],
+  ["references", "References"],
+  ["material_discrepancies", "Material discrepancies and explanations"],
+] as const;
+
+function Decision({
+  decisions,
+  onRecord,
+  onRecordNotice,
+}: {
+  decisions: Row[];
+  onRecord: (fd: FormData) => Promise<void>;
+  onRecordNotice: (fd: FormData) => Promise<void>;
+}) {
+  const latest = decisions[0];
+  return (
+    <div className="flex flex-col gap-4 max-w-2xl">
+      {latest && (
+        <Card>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-ink capitalize">{latest.outcome}</span>
+            <span className="text-xs text-ink-soft tabular">{new Date(latest.decided_at).toLocaleDateString()}</span>
+          </div>
+          <p className="text-sm text-ink whitespace-pre-wrap">{latest.reasoning_notes}</p>
+          {Object.keys(latest.factors ?? {}).length > 0 && (
+            <dl className="mt-3 flex flex-col gap-1">
+              {Object.entries(latest.factors as Record<string, string>).map(([k, v]) => (
+                <div key={k} className="text-xs">
+                  <dt className="text-ink-soft inline">{DECISION_FACTORS.find(([key]) => key === k)?.[1] ?? k}: </dt>
+                  <dd className="inline text-ink">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {latest.adverse_action_report_used && (
+            <div className="mt-3 rounded border border-warn/30 bg-warn-bg px-3 py-2 text-xs text-warn flex flex-col gap-2">
+              <span>Screening report was used — FCRA adverse action notices required. Confirm exact language/timing with counsel.</span>
+              <div className="flex gap-4">
+                {latest.pre_adverse_notice_sent_at ? (
+                  <span>Pre-adverse sent {new Date(latest.pre_adverse_notice_sent_at).toLocaleDateString()}</span>
+                ) : (
+                  <form action={onRecordNotice}>
+                    <input type="hidden" name="decision_id" value={latest.id} />
+                    <input type="hidden" name="notice_field" value="pre_adverse_notice_sent_at" />
+                    <button type="submit" className="underline hover:no-underline">
+                      Mark pre-adverse notice sent
+                    </button>
+                  </form>
+                )}
+                {latest.adverse_notice_sent_at ? (
+                  <span>Adverse sent {new Date(latest.adverse_notice_sent_at).toLocaleDateString()}</span>
+                ) : (
+                  <form action={onRecordNotice}>
+                    <input type="hidden" name="decision_id" value={latest.id} />
+                    <input type="hidden" name="notice_field" value="adverse_notice_sent_at" />
+                    <button type="submit" className="underline hover:no-underline">
+                      Mark adverse notice sent
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card>
+        <h3 className="text-sm font-semibold text-ink mb-1">{latest ? "Record a new decision" : "Record decision"}</h3>
+        <p className="text-xs text-ink-soft mb-3">
+          Holistic and documented — never based on credit score alone, never on protected characteristics.
+        </p>
+        <form action={onRecord} className="flex flex-col gap-3">
+          <select name="outcome" required className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+            <option value="approved">Approved</option>
+            <option value="denied">Denied</option>
+            <option value="withdrawn">Withdrawn</option>
+          </select>
+          <select name="decision_type" className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
+            <option value="">— If approved: agreement type —</option>
+            <option value="traditional_lease">Traditional lease</option>
+            <option value="lease_option">Lease with option to purchase</option>
+          </select>
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-ink-soft">Factors considered</span>
+            {DECISION_FACTORS.map(([key, label]) => (
+              <div key={key} className="grid grid-cols-[1fr_2fr] gap-2 items-start">
+                <label className="text-xs text-ink pt-2">{label}</label>
+                <input name={`factor_${key}`} placeholder="Notes (optional)" className="rounded border border-line bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent" />
+              </div>
+            ))}
+          </div>
+          <textarea
+            name="reasoning_notes"
+            required
+            placeholder="Overall reasoning — why this decision"
+            rows={4}
+            className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input type="checkbox" name="adverse_action_report_used" className="rounded border-line" />
+            A screening/consumer report factored into this decision
+          </label>
+          <button type="submit" className="rounded bg-accent px-3 py-2 text-sm font-medium text-accent-ink hover:bg-accent-strong self-start">
+            Record decision
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
 function Roadmap() {
-  const items = [
-    "Screening — RentPrep request tracking",
-    "Verification workspace — landlord/employer/reference checks",
-    "Discrepancies",
-    "Decision notes",
-    "Documents",
-    "Notices",
-    "Maintenance",
-  ];
+  const items = ["Documents", "Notices", "Maintenance"];
   return (
     <Card>
       <p className="text-sm text-ink-soft mb-2">Not built yet — next up after the applicant-facing flow is working end to end.</p>
