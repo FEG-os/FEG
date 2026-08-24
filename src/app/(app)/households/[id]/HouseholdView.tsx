@@ -55,6 +55,7 @@ export default function HouseholdView({
         </div>
         <form action={async (fd) => actions.updateStage(fd)} className="flex items-center gap-2">
           <select
+            key={household.pipeline_stage}
             name="pipeline_stage"
             defaultValue={household.pipeline_stage}
             onChange={(e) => e.currentTarget.form?.requestSubmit()}
