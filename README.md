@@ -76,3 +76,4 @@ MVP/Phase 2/3 split.
 - `src/lib/supabase/service.ts` — service-role client. Server-only. Used by
   the applicant-facing API routes (no login) and by webhook handlers.
   Never import this from anything that ships to the browser.
+# FEG
