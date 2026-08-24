@@ -4,7 +4,16 @@ import { NextResponse, type NextRequest } from "next/server";
 // Refreshes the Supabase auth session on every request so server
 // components always see an up-to-date session, and redirects
 // unauthenticated visitors away from internal (non-/apply) pages.
+const MARKETING_HOSTS = new Set(["floresequity.com", "www.floresequity.com"]);
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const host = request.headers.get("host") ?? "";
+
+  if (MARKETING_HOSTS.has(host) && pathname === "/") {
+    return NextResponse.rewrite(new URL("/site", request.url));
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,9 +39,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isPublicPath =
     pathname.startsWith("/apply") ||
+    pathname.startsWith("/site") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/brand") ||
