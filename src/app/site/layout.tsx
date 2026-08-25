@@ -16,13 +16,21 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <Image src="/brand/feg-circle.png" alt="Flores Equity Group" width={36} height={36} className="rounded-full shrink-0" priority />
             <span className="font-display text-sm tracking-wide text-ink whitespace-nowrap truncate">Flores Equity Group</span>
           </Link>
-          <a
-            href="https://app.floresequity.com/login"
-            className="shrink-0 rounded border border-line-strong px-3 py-1.5 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
-          >
-            <span className="hidden sm:inline">Resident &amp; Staff Login</span>
-            <span className="sm:hidden">Login</span>
-          </a>
+          <div className="flex items-center gap-4 sm:gap-5 shrink-0">
+            <a
+              href="/#sell"
+              className="hidden sm:inline text-xs font-medium text-ink-soft hover:text-accent transition-colors whitespace-nowrap"
+            >
+              Sell Your House
+            </a>
+            <a
+              href="https://app.floresequity.com/login"
+              className="shrink-0 rounded border border-line-strong px-3 py-1.5 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
+            >
+              <span className="hidden sm:inline">Resident &amp; Staff Login</span>
+              <span className="sm:hidden">Login</span>
+            </a>
+          </div>
         </div>
       </header>
 

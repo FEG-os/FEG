@@ -22,6 +22,13 @@ const steps = [
   { n: "04", title: "Sign & move in", body: "Lease signed electronically, keys handed over." },
 ];
 
+const sellPoints = [
+  "No realtor fees or commissions",
+  "Sold as-is — no repairs, no cleaning, no showings",
+  "A fair cash offer, no financing contingencies",
+  "Close on your timeline, not a buyer's",
+];
+
 export default function MarketingHome() {
   return (
     <main className="flex-1">
@@ -74,6 +81,50 @@ export default function MarketingHome() {
               <p className="text-sm text-ink-soft leading-relaxed">{s.body}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="sell" className="border-t border-line bg-accent-tint scroll-mt-20">
+        <div className="max-w-5xl mx-auto px-6 py-14 sm:py-20 grid sm:grid-cols-2 gap-10 sm:gap-16 items-start">
+          <div>
+            <p className="brand-eyebrow mb-4">Also Buying</p>
+            <h2 className="font-display text-2xl sm:text-3xl text-ink mb-4 text-balance">
+              Selling a house? We'll buy it for cash.
+            </h2>
+            <p className="text-sm text-ink-soft leading-relaxed max-w-md">
+              We buy houses directly, as-is, for cash — no realtor, no repairs, no waiting on a
+              buyer's financing to fall through.
+            </p>
+            <a
+              href="mailto:mylegacypros@gmail.com?subject=Sell%20My%20House"
+              className="mt-6 inline-block rounded bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink hover:bg-accent-strong transition-colors"
+            >
+              Get a Cash Offer
+            </a>
+          </div>
+          <ul className="flex flex-col gap-4">
+            {sellPoints.map((p) => (
+              <li key={p} className="flex items-start gap-3 text-sm text-ink">
+                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="max-w-5xl mx-auto px-6 py-14 sm:py-20">
+        <div className="max-w-2xl">
+          <p className="brand-eyebrow mb-4">Who We Are</p>
+          <h2 className="font-display text-2xl sm:text-3xl text-ink mb-4 text-balance">
+            A family business, not a franchise.
+          </h2>
+          <p className="text-sm sm:text-base text-ink-soft leading-relaxed">
+            Flores Equity Group is family-owned and operated — run day to day by a husband-and-wife
+            team, not a call center or a national property manager. We're raising our own kids in
+            this community, and we treat every home and every resident the way we'd want to be
+            treated ourselves.
+          </p>
         </div>
       </section>
 
