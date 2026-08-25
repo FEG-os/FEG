@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/pipeline";
 
 const TABS = [
@@ -82,7 +83,15 @@ export default function HouseholdView({
           <h1 className="text-lg font-semibold text-ink">
             {primary ? `${primary.first_name} ${primary.last_name}` : "Unnamed household"}
           </h1>
-          <p className="text-sm text-ink-soft mt-0.5">{household.properties?.name ?? "No property assigned"}</p>
+          <p className="text-sm text-ink-soft mt-0.5">
+            {household.property_id ? (
+              <Link href={`/properties/${household.property_id}`} className="hover:text-accent transition-colors">
+                {household.properties?.name ?? "View property"}
+              </Link>
+            ) : (
+              "No property assigned"
+            )}
+          </p>
         </div>
         <form action={async (fd) => actions.updateStage(fd)} className="flex items-center gap-2">
           <select

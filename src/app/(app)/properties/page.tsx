@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireStaff } from "@/lib/staff";
 import { createProperty, deleteProperty } from "./actions";
@@ -30,7 +31,9 @@ export default async function PropertiesPage() {
           <div key={p.id} className="rounded border border-line bg-surface p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
-                <h3 className="font-medium text-ink">{p.name}</h3>
+                <Link href={`/properties/${p.id}`} className="font-medium text-ink hover:text-accent transition-colors">
+                  {p.name}
+                </Link>
                 <span className="text-xs rounded-full bg-surface-2 px-2 py-0.5 text-ink-soft capitalize">
                   {p.status}
                 </span>

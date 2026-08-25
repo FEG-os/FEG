@@ -46,3 +46,27 @@ export async function deleteProperty(propertyId: string) {
 
   revalidatePath("/properties");
 }
+
+export async function updateProperty(propertyId: string, formData: FormData) {
+  await requireStaff();
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("properties")
+    .update({
+      name: String(formData.get("name")),
+      address: String(formData.get("address")),
+      monthly_rent: Number(formData.get("monthly_rent")),
+      security_deposit: Number(formData.get("security_deposit")),
+      application_fee_per_adult: Number(formData.get("application_fee_per_adult") || 85),
+      is_furnished: formData.get("is_furnished") === "on",
+      pet_deposit_allowed: formData.get("pet_deposit_allowed") === "on",
+      status: String(formData.get("status")) as "available" | "occupied" | "off_market",
+    })
+    .eq("id", propertyId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/properties");
+  revalidatePath(`/properties/${propertyId}`);
+}

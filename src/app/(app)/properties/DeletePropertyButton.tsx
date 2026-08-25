@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function DeletePropertyButton({
   propertyName,
   onDelete,
+  redirectTo,
 }: {
   propertyName: string;
   onDelete: () => Promise<void>;
+  redirectTo?: string;
 }) {
+  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,6 +22,7 @@ export default function DeletePropertyButton({
     setError(null);
     try {
       await onDelete();
+      if (redirectTo) router.push(redirectTo);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete this property.");
     } finally {
