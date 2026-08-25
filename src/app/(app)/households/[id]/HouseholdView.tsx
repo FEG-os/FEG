@@ -338,10 +338,28 @@ function Payments({ payments, action }: { payments: Row[]; action: (fd: FormData
       <div className="rounded border border-line bg-surface divide-y divide-line">
         {payments.length === 0 && <p className="p-4 text-sm text-ink-soft">No payments recorded yet.</p>}
         {payments.map((p) => (
-          <div key={p.id} className="p-3 flex items-center justify-between text-sm">
+          <div key={p.id} className="p-3 flex items-center justify-between gap-3 text-sm">
             <span className="capitalize">{p.payment_type.replace(/_/g, " ")}</span>
             <span className="tabular">${Number(p.amount).toFixed(2)}</span>
-            <span className="text-xs text-ink-soft capitalize">{p.status}</span>
+            <span className="flex items-center gap-2 shrink-0">
+              {p.status === "pending" && p.square_hosted_url && (
+                <a
+                  href={p.square_hosted_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-accent hover:text-accent-strong transition-colors"
+                >
+                  View invoice
+                </a>
+              )}
+              <span
+                className={`text-xs capitalize rounded-full px-2 py-0.5 ${
+                  p.status === "paid" ? TONE_CLASSES.good : p.status === "pending" ? TONE_CLASSES.warn : TONE_CLASSES.flat
+                }`}
+              >
+                {p.status}
+              </span>
+            </span>
           </div>
         ))}
         {payments.length > 0 && (
@@ -354,7 +372,8 @@ function Payments({ payments, action }: { payments: Row[]; action: (fd: FormData
       <Card>
         <h3 className="text-sm font-semibold text-ink mb-3">Record a payment</h3>
         <p className="text-xs text-ink-soft mb-3">
-          For manual entries only (bank deposits, cash). Square-paid fees will populate automatically once webhooks are wired up.
+          For manual entries only (bank deposits, cash, checks). The application fee invoice is created and paid
+          automatically through the applicant's own link — it'll show up above once they get there.
         </p>
         <form action={action} className="flex flex-col gap-3">
           <select name="payment_type" required className="rounded border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
