@@ -11,16 +11,17 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex-1 flex flex-col">
       <header className="border-b border-line">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3">
-            <Image src="/brand/feg-circle.png" alt="Flores Equity Group" width={36} height={36} className="rounded-full" priority />
-            <span className="font-display text-sm tracking-wide text-ink">Flores Equity Group</span>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <Image src="/brand/feg-circle.png" alt="Flores Equity Group" width={36} height={36} className="rounded-full shrink-0" priority />
+            <span className="font-display text-sm tracking-wide text-ink whitespace-nowrap truncate">Flores Equity Group</span>
           </Link>
           <a
             href="https://app.floresequity.com/login"
-            className="rounded border border-line-strong px-3 py-1.5 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors"
+            className="shrink-0 rounded border border-line-strong px-3 py-1.5 text-xs font-medium text-ink hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
           >
-            Resident &amp; Staff Login
+            <span className="hidden sm:inline">Resident &amp; Staff Login</span>
+            <span className="sm:hidden">Login</span>
           </a>
         </div>
       </header>
