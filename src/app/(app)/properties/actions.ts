@@ -22,3 +22,27 @@ export async function createProperty(formData: FormData) {
 
   revalidatePath("/properties");
 }
+
+export async function deleteProperty(propertyId: string) {
+  const staff = await requireStaff();
+  if (staff.role !== "owner") {
+    throw new Error("Only an owner can delete a property.");
+  }
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("households")
+    .select("id", { count: "exact", head: true })
+    .eq("property_id", propertyId);
+
+  if (count && count > 0) {
+    throw new Error(
+      `This property has ${count} household${count === 1 ? "" : "s"} attached — remove or reassign ${count === 1 ? "it" : "them"} first.`
+    );
+  }
+
+  const { error } = await supabase.from("properties").delete().eq("id", propertyId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/properties");
+}

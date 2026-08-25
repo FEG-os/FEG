@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { createProperty } from "./actions";
+import { requireStaff } from "@/lib/staff";
+import { createProperty, deleteProperty } from "./actions";
+import DeletePropertyButton from "./DeletePropertyButton";
 
 function money(n: number | null) {
   if (n === null || n === undefined) return "—";
@@ -7,6 +9,7 @@ function money(n: number | null) {
 }
 
 export default async function PropertiesPage() {
+  const staff = await requireStaff();
   const supabase = await createClient();
   const { data: properties } = await supabase
     .from("properties")
@@ -25,11 +28,19 @@ export default async function PropertiesPage() {
       <div className="grid gap-3 sm:grid-cols-2">
         {(properties ?? []).map((p) => (
           <div key={p.id} className="rounded border border-line bg-surface p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium text-ink">{p.name}</h3>
-              <span className="text-xs rounded-full bg-surface-2 px-2 py-0.5 text-ink-soft capitalize">
-                {p.status}
-              </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-ink">{p.name}</h3>
+                <span className="text-xs rounded-full bg-surface-2 px-2 py-0.5 text-ink-soft capitalize">
+                  {p.status}
+                </span>
+              </div>
+              {staff.role === "owner" && (
+                <DeletePropertyButton
+                  propertyName={p.name}
+                  onDelete={deleteProperty.bind(null, p.id)}
+                />
+              )}
             </div>
             <p className="text-sm text-ink-soft mt-1">{p.address}</p>
             <dl className="mt-3 grid grid-cols-3 gap-2 text-sm tabular">
